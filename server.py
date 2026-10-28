@@ -262,11 +262,13 @@ async def get_tweet_by_id(tweet_id: str) -> str:
                 fav_count = getattr(tweet, "favorite_count", 0)
                 retweet_count = getattr(tweet, "retweet_count", 0)
                 reply_count = getattr(tweet, "reply_count", 0)
+                bookmark_count = getattr(tweet, "bookmark_count", 0)
+                views_count = getattr(tweet, "view_count", None) or getattr(tweet, "views", "0")
                 return (
                     f"Tweet ID: {tweet.id}\n"
                     f"Author: @{screen_name}\n"
                     f"Created At: {created_at}\n"
-                    f"Stats: ❤️ {fav_count} | 🔁 {retweet_count} | 💬 {reply_count}\n\n"
+                    f"Stats: Likes: {fav_count} | Bookmarks: {bookmark_count} | Retweets: {retweet_count} | Replies: {reply_count} | Views: {views_count}\n\n"
                     f"Text:\n{tweet.text}\n\n"
                     f"URL: https://x.com/i/status/{tweet.id}"
                 )
@@ -295,12 +297,15 @@ async def get_tweet_by_id(tweet_id: str) -> str:
                         fav_count = legacy.get("favorite_count", 0)
                         retweet_count = legacy.get("retweet_count", 0)
                         reply_count = legacy.get("reply_count", 0)
+                        bookmark_count = legacy.get("bookmark_count", 0)
+                        views_obj = tweet_results.get("views", {})
+                        views_count = views_obj.get("count", "0") if isinstance(views_obj, dict) else "0"
                         full_text = legacy.get("full_text") or ""
                         return (
                             f"Tweet ID: {tweet_id}\n"
                             f"Author: @{screen_name}\n"
                             f"Created At: {created_at}\n"
-                            f"Stats: ❤️ {fav_count} | 🔁 {retweet_count} | 💬 {reply_count}\n\n"
+                            f"Stats: Likes: {fav_count} | Bookmarks: {bookmark_count} | Retweets: {retweet_count} | Replies: {reply_count} | Views: {views_count}\n\n"
                             f"Text:\n{full_text}\n\n"
                             f"URL: https://x.com/i/status/{tweet_id}"
                         )
