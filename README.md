@@ -1,51 +1,37 @@
-# 🐦 Twitter (X) MCP Server
+# X (Twitter) MCP 服务
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
-[![Python 3.10+](https://img.shields.io/badge/python-3.10+-brightgreen.svg)](https://www.python.org/downloads/)
-[![MCP](https://img.shields.io/badge/MCP-Compatible-purple.svg)](https://modelcontextprotocol.io)
+本项目是基于 [twikit](https://github.com/d60/twikit) 实现的 Model Context Protocol (MCP) 服务，支持 Claude Desktop、Cursor 等大模型客户端与 X (Twitter) 进行交互。
 
-English | [中文说明](#中文说明)
-
-A lightweight, powerful, and **100% free** Model Context Protocol (MCP) server for **X (Twitter)**, powered by [twikit](https://github.com/d60/twikit).
-
-Empower your AI assistants (**Claude Desktop, Cursor, Cline, Open WebUI, D-Home, etc.**) to interact with X in real-time — **without paying $100+/month** for the official Twitter API.
+通过配置账号的浏览器 Cookie（`auth_token` 与 `ct0`），服务即可提供推文发布、回复读取、私信收发、搜索等功能。
 
 ---
 
-## ✨ Features
+## 功能列表
 
-- ✍️ **Post & Reply**: Post tweets and thread replies.
-- 💬 **Comment & Reply Thread Reader**: Read all comments under any tweet with custom GraphQL thread parsing (bypasses twikit's cursor pagination limitations).
-- 📨 **Direct Messages (DMs)**: Read conversation histories and send direct messages.
-- 🔍 **Search & Discover**: Search recent tweets with keywords, hashtags, or query filters.
-- 👤 **Profiles & Timelines**: Inspect user bios, follower counts, and recent user tweets.
-- 💖 **Social Actions**: Like (favorite), Retweet, and Delete your tweets.
-- 🛡️ **Zero API Fees**: Uses web session cookies (`auth_token` and `ct0`).
+服务目前提供 12 个 MCP 工具：
 
----
-
-## 🛠️ Tool Catalog
-
-| Tool Name | Description | Key Parameters |
+| 工具名称 | 功能描述 | 参数 |
 | :--- | :--- | :--- |
-| `post_tweet` | Post a new tweet | `text` |
-| `reply_tweet` | Reply to a tweet or comment | `tweet_id`, `text` |
-| `get_tweet_replies` | Read all comments/replies under a tweet | `tweet_id`, `count` (default: 10) |
-| `read_direct_messages` | Read DM conversation history with a user | `username`, `count` (default: 10) |
-| `send_direct_message` | Send or reply to a DM | `username`, `text`, `reply_to_message_id` |
-| `search_tweets` | Search tweets by keyword or query | `query`, `count` (default: 10) |
-| `get_tweet_by_id` | Get full details & metrics of a tweet | `tweet_id` |
-| `get_user_info` | Get user bio, follower stats, etc. | `username` |
-| `get_user_tweets` | Fetch recent tweets posted by a user | `username`, `count` (default: 5) |
-| `favorite_tweet` | Like a tweet | `tweet_id` |
-| `retweet` | Retweet / repost a tweet | `tweet_id` |
-| `delete_tweet` | Delete a tweet posted by yourself | `tweet_id` |
+| `post_tweet` | 发布新推文 | `text`（推文内容） |
+| `reply_tweet` | 回复指定推文或评论 | `tweet_id`（目标推文 ID）, `text`（回复内容） |
+| `get_tweet_replies` | 获取指定推文下方的评论与回复列表 | `tweet_id`（推文 ID）, `count`（获取数量，默认 10） |
+| `read_direct_messages` | 获取与指定用户的私信聊天记录 | `username`（对方用户名）, `count`（获取条数，默认 10） |
+| `send_direct_message` | 向指定用户发送私信或回复消息 | `username`（目标用户名）, `text`（消息内容）, `reply_to_message_id`（可选） |
+| `search_tweets` | 根据关键词或查询语法搜索推文 | `query`（搜索词）, `count`（获取数量，默认 10） |
+| `get_tweet_by_id` | 获取指定推文的详细信息及互动数据 | `tweet_id`（推文 ID） |
+| `get_user_info` | 获取指定用户的个人资料及粉丝等统计信息 | `username`（用户名） |
+| `get_user_tweets` | 获取指定用户最近发布的推文列表 | `username`（用户名）, `count`（获取数量，默认 5） |
+| `favorite_tweet` | 点赞指定推文 | `tweet_id`（推文 ID） |
+| `retweet` | 转推指定推文 | `tweet_id`（推文 ID） |
+| `delete_tweet` | 删除自己发布的推文 | `tweet_id`（推文 ID） |
 
 ---
 
-## 🚀 Quick Start
+## 安装与部署
 
-### 1. Installation
+### 1. 克隆仓库与安装依赖
+
+环境要求：Python 3.10 及以上。
 
 ```bash
 git clone https://github.com/yxiy171866-boop/x-twikit-mcp.git
@@ -53,42 +39,43 @@ cd x-twikit-mcp
 pip install -r requirements.txt
 ```
 
-### 2. Get Your Twitter Cookies (in 30 seconds)
+### 2. 获取与配置 Cookie
 
-You only need **two cookie values**: `auth_token` and `ct0`.
+运行服务需要两个 Cookie 字段：`auth_token` 与 `ct0`。
 
-1. Open [x.com](https://x.com) in your browser and log into your account.
-2. Press `F12` (or Right-Click -> **Inspect**) to open Developer Tools.
-3. Go to the **Application** tab (in Chrome/Edge) or **Storage** tab (in Firefox).
-4. Expand **Cookies** on the left and select `https://x.com`.
-5. Find and copy the values for:
+1. 在浏览器中打开并登录 [x.com](https://x.com)。
+2. 按 `F12` 打开浏览器开发者工具。
+3. 进入 **Application**（Chrome/Edge）或 **存储 (Storage)**（Firefox）标签页。
+4. 展开左侧的 **Cookies**，选择 `https://x.com`。
+5. 在列表中找到并复制以下两项的值：
    - `auth_token`
    - `ct0`
 
-#### Configure your cookies:
+#### 配置方式（二选一）
 
-**Option A (Recommended): Environment Variables**
-```bash
-export TWITTER_AUTH_TOKEN="your_auth_token_here"
-export TWITTER_CT0="your_ct0_here"
-```
+- **方式一：通过环境变量配置（推荐）**
+  ```bash
+  export TWITTER_AUTH_TOKEN="你的 auth_token"
+  export TWITTER_CT0="你的 ct0"
+  ```
 
-**Option B: `cookies.json` file**
-Copy `cookies.json.example` to `cookies.json` in the project root:
-```json
-{
-  "auth_token": "your_auth_token_here",
-  "ct0": "your_ct0_here"
-}
-```
+- **方式二：通过配置文件配置**
+  复制根目录下的 `cookies.json.example` 为 `cookies.json`：
+  ```json
+  {
+    "auth_token": "你的 auth_token",
+    "ct0": "你的 ct0"
+  }
+  ```
+  服务会优先读取环境变量，未设置时读取当前目录下的 `cookies.json`。
 
 ---
 
-## 🔌 Client Configuration
+## 客户端配置示例
 
 ### Claude Desktop
 
-Add this to your Claude Desktop configuration file:
+在 Claude Desktop 配置文件中添加服务配置：
 - **macOS**: `~/Library/Application Support/Claude/claude_desktop_config.json`
 - **Windows**: `%APPDATA%\Claude\claude_desktop_config.json`
 - **Linux**: `~/.config/Claude/claude_desktop_config.json`
@@ -98,10 +85,10 @@ Add this to your Claude Desktop configuration file:
   "mcpServers": {
     "twitter": {
       "command": "python3",
-      "args": ["/ABSOLUTE/PATH/TO/twitter-mcp-server/server.py"],
+      "args": ["/绝对路径/x-twikit-mcp/server.py"],
       "env": {
-        "TWITTER_AUTH_TOKEN": "your_auth_token_here",
-        "TWITTER_CT0": "your_ct0_here"
+        "TWITTER_AUTH_TOKEN": "你的 auth_token",
+        "TWITTER_CT0": "你的 ct0"
       }
     }
   }
@@ -110,17 +97,17 @@ Add this to your Claude Desktop configuration file:
 
 ### Cursor
 
-Add to your project's `.cursor/mcp.json` or Global Cursor Settings:
+在项目目录的 `.cursor/mcp.json` 或全局 Cursor 设置中添加：
 
 ```json
 {
   "mcpServers": {
     "twitter": {
       "command": "python3",
-      "args": ["/ABSOLUTE/PATH/TO/twitter-mcp-server/server.py"],
+      "args": ["/绝对路径/x-twikit-mcp/server.py"],
       "env": {
-        "TWITTER_AUTH_TOKEN": "your_auth_token_here",
-        "TWITTER_CT0": "your_ct0_here"
+        "TWITTER_AUTH_TOKEN": "你的 auth_token",
+        "TWITTER_CT0": "你的 ct0"
       }
     }
   }
@@ -129,36 +116,14 @@ Add to your project's `.cursor/mcp.json` or Global Cursor Settings:
 
 ---
 
-## 🔒 Security & Privacy
+## 技术实现说明
 
-- **Your credentials stay local**: Cookies are only used locally on your machine to communicate directly with X's servers. No proxies, no external telemetry, no remote logging.
-- **`.gitignore` protection**: `cookies.json` is automatically ignored to prevent accidental leaks.
-- **Account recommendation**: For production autonomous bots, we recommend using a dedicated secondary account or a verified phone-linked account to avoid strict rate-limiting.
-
----
-
-<br>
-
-<h2 id="中文说明">📖 中文说明</h2>
-
-这是一个专为大语言模型打造的 **X (Twitter) MCP 插件服务**。基于 Python 与 `twikit` 逆向 Web 接口，**无需申请 X 官方昂贵的高门槛 API（官方基础套餐每月需 \$100）**，仅凭普通账号的网页 Session Cookie 即可让 Claude、Cursor、Cline 等 AI 助手完全掌控推特能力！
-
-### 核心亮点
-- **功能齐全**：支持发推、回复评论、查看帖子下全部评论、读写私信、搜索推文、抓取主页与点赞。
-- **专项 Bug 绕过**：针对 twikit 原版在读取推文评论（`tweet_detail`）时游标分页丢失的问题，内置定制化 GraphQL 解析，能完整读取推文下的所有回复与评论。
-- **免密部署**：支持环境变量注入与本地 `cookies.json`，支持浏览器插件导出的 Cookie 格式。
-- **优雅风控处理**：内建 344（发推频次限额）、226（防机械拦截）等友好错误提醒。
-
-### 快速获取 Cookies
-1. 电脑浏览器打开并登录 [x.com](https://x.com)。
-2. 按 `F12` 键打开开发者工具 -> 切换到 **Application（应用）** 标签页。
-3. 在左侧展开 **Cookies** -> 点击 `https://x.com`。
-4. 在表格中找到并复制 `auth_token` 与 `ct0` 两个字段的值。
-5. 在项目根目录复制 `cookies.json.example` 为 `cookies.json` 填入即可。
+- 底层通信基于 `twikit` 库调用 X 的 Web GraphQL 接口。
+- 针对推文详情中的回复列表读取，内置了层级解析逻辑，用于提取会话线索（Thread）中的各级回复内容。
+- 本地认证凭据仅在本地客户端与 X 官方服务器通信时使用，不会上传至第三方服务器。
 
 ---
 
-## 📄 License
+## 开源协议
 
-This project is open-source under the [MIT License](LICENSE).
-
+本项目采用 [MIT License](LICENSE) 授权。
