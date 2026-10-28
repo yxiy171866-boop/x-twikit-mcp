@@ -156,6 +156,38 @@ pip install -r requirements.txt
 
 ---
 
+## 常见问题与使用限制
+
+### 1. 网络与代理设置
+若处于无法直连 X (Twitter) 的网络环境中，客户端调用可能出现 `ConnectTimeout` 或 `ConnectError`。
+可以在客户端配置的环境变量（`env`）中补充代理地址：
+```json
+"env": {
+  "TWITTER_AUTH_TOKEN": "你的 auth_token",
+  "TWITTER_CT0": "你的 ct0",
+  "HTTP_PROXY": "http://127.0.0.1:7890",
+  "HTTPS_PROXY": "http://127.0.0.1:7890"
+}
+```
+
+### 2. 官方风控与错误码排查
+当调用频率过高或触发平台规则时，接口可能返回以下错误码：
+
+| 错误码 / 报错 | 原因说明 | 处理方式 |
+| :--- | :--- | :--- |
+| `344` (Rate limit) | 发推或回复频率过快，触发当前时间段限额 | 暂停 15 至 30 分钟后再发起请求 |
+| `226` (Automated request) | 请求被判定为疑似自动化行为 | 在浏览器中正常访问推特做一次手动互动，或使用注册时间较长的账号 |
+| `187` (Status is a duplicate) | 发送了与上一条完全相同的推文内容 | 调整推文内容后再发布 |
+| `186` (Tweet needs to be shorter) | 推文字数超出单条上限（普通账号约 280 字符 / 140 个汉字） | 缩减推文内容长度 |
+| `88` (Rate limit exceeded) | 搜索或数据读取接口达到频次上限 | 等待约 15 分钟频次重置 |
+
+### 3. 业务场景与环境限制
+- **私信权限限制**：若目标用户关闭了陌生人私信接收权限（例如设置为仅允许互关好友或认证用户私信），发送私信会调用失败。
+- **接口变更与依赖更新**：底层依赖的 `twikit` 库基于网页端 GraphQL 接口实现。若平台调整接口结构，可运行 `pip install -U twikit` 更新底层库。
+- **Python 运行环境路径**：若系统中安装了多个 Python 版本，导致客户端运行时提示 `ModuleNotFoundError: No module named 'twikit'`，请将配置文件中的 `"command": "python3"` 替换为安装了对应依赖的 Python 解释器绝对路径。
+
+---
+
 ## 开源协议
 
 本项目采用 [MIT License](LICENSE) 授权。
