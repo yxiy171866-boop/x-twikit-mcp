@@ -1,14 +1,14 @@
 # X (Twitter) MCP 服务
 
-本项目是基于 [twikit](https://github.com/d60/twikit) 实现的 Model Context Protocol (MCP) 服务，支持 Claude Desktop、Cursor 等大模型客户端与 X (Twitter) 进行交互。
+本项目是基于 [twikit](https://github.com/d60/twikit) 实现的 Model Context Protocol (MCP) 服务，专门为 AI 助手、大语言模型及各类 AI Agent 提供与 X (Twitter) 交互的能力。通过本服务，AI 能够自主调用工具完成发推、回复评论、读取推文回复、收发私信等操作。
 
-通过配置账号的浏览器 Cookie（`auth_token` 与 `ct0`），服务即可提供推文发布、回复读取、私信收发、搜索等功能。
+通过配置账号的浏览器 Cookie（`auth_token` 与 `ct0`），服务即可为 AI 提供 12 项社交平台交互工具。
 
 ---
 
 ## 功能列表
 
-服务目前提供 12 个 MCP 工具：
+服务目前为 AI 助手提供以下 12 个 MCP 工具：
 
 | 工具名称 | 功能描述 | 参数 |
 | :--- | :--- | :--- |
@@ -113,6 +113,38 @@ pip install -r requirements.txt
   }
 }
 ```
+
+### 通用第三方客户端与 Agent 平台（如 Cherry Studio、Chatbox 等）
+
+多数支持 MCP 协议的可视化客户端或自建 Agent 平台，通常提供“一键粘贴 JSON”或“表单填写”两种添加方式：
+
+#### 方式一：一键粘贴 JSON
+在客户端的 JSON 配置框中粘贴以下内容：
+```json
+{
+  "command": "python3",
+  "args": ["/绝对路径/x-twikit-mcp/server.py"],
+  "env": {
+    "TWITTER_AUTH_TOKEN": "你的 auth_token",
+    "TWITTER_CT0": "你的 ct0"
+  }
+}
+```
+注：若客户端要求完整配置对象，请使用包含 `mcpServers` 顶层键的格式（同上方 Claude Desktop 示例）。
+
+#### 方式二：表单填写
+若客户端为表单填写界面，各字段填写对应关系如下：
+- **服务名称 / 标识符**：`twitter`（或自定义名称）
+- **传输协议 (Transport)**：`stdio`
+- **启动命令 (Command)**：`python3`
+- **启动参数 (Arguments)**：`/绝对路径/x-twikit-mcp/server.py`
+- **环境变量 (Environment)**：
+  ```json
+  {
+    "TWITTER_AUTH_TOKEN": "你的 auth_token",
+    "TWITTER_CT0": "你的 ct0"
+  }
+  ```
 
 ---
 
