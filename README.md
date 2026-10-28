@@ -48,8 +48,8 @@ Empower your AI assistants (**Claude Desktop, Cursor, Cline, Open WebUI, D-Home,
 ### 1. Installation
 
 ```bash
-git clone https://github.com/your-username/twitter-mcp-server.git
-cd twitter-mcp-server
+git clone https://github.com/yxiy171866-boop/x-twikit-mcp.git
+cd x-twikit-mcp
 pip install -r requirements.txt
 ```
 
@@ -161,3 +161,4 @@ Add to your project's `.cursor/mcp.json` or Global Cursor Settings:
 ## 📄 License
 
 This project is open-source under the [MIT License](LICENSE).
+
