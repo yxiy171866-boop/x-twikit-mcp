@@ -5,6 +5,9 @@ cookies.json
 .env
 .env.*
 *.token
+priority_accounts.json
+*.bak
+*.bak*
 
 # Python & Environments
 __pycache__/
