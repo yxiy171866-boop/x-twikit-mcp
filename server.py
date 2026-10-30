@@ -115,6 +115,97 @@ async def _resolve_user_id(client: Client, identifier: str) -> tuple[str, str]:
     return str(user.id), user.screen_name
 
 
+async def _get_my_user_id(client: Client) -> str:
+    """Safely obtain the current authenticated user's ID without triggering 404 on settings.json."""
+    if hasattr(client, "_cached_my_id") and client._cached_my_id:
+        return client._cached_my_id
+
+    # Strategy 1: Find common participant across conversations in DM inbox
+    try:
+        import twikit.client.v11 as v11
+        dm_res, _ = await client.v11.base.get(
+            v11.Endpoint.DM_INBOX,
+            headers=client.v11.base._base_headers
+        )
+        if isinstance(dm_res, dict):
+            inbox = dm_res.get("inbox_initial_state", {})
+            convs = inbox.get("conversations", {})
+            part_sets = [set(str(p.get("user_id", "")) for p in item.get("participants", [])) for item in convs.values()]
+            if part_sets:
+                common = set.intersection(*part_sets)
+                if common:
+                    uid = str(list(common)[0])
+                    client._cached_my_id = uid
+                    return uid
+    except Exception:
+        pass
+
+    # Strategy 2: Attempt client.v11.settings()
+    try:
+        res, _ = await client.v11.settings()
+        sn = res.get("screen_name")
+        if sn:
+            uid, _ = await _resolve_user_id(client, sn)
+            client._cached_my_id = str(uid)
+            return str(uid)
+    except Exception:
+        pass
+
+    # Strategy 3: Standard client.user_id()
+    uid = str(await client.user_id())
+    client._cached_my_id = uid
+    return uid
+
+
+async def _expand_tco_links(text: str) -> str:
+    """Expand short t.co links in text to full target URLs."""
+    import re, httpx
+    if not text or "t.co/" not in text:
+        return text or ""
+    urls = re.findall(r"https?://t\.co/[a-zA-Z0-9]+", text)
+    if not urls:
+        return text
+    expanded_map = {}
+    try:
+        async with httpx.AsyncClient(follow_redirects=True, timeout=5.0) as http_client:
+            for u in set(urls):
+                try:
+                    r = await http_client.head(u)
+                    target = str(r.url)
+                    if target != u:
+                        expanded_map[u] = target
+                except Exception:
+                    try:
+                        r = await http_client.get(u)
+                        target = str(r.url)
+                        if target != u:
+                            expanded_map[u] = target
+                    except Exception:
+                        pass
+    except Exception:
+        pass
+
+    for short_u, full_u in expanded_map.items():
+        text = text.replace(short_u, f"{short_u} ({full_u})")
+    return text
+
+
+def _format_timestamp(ts: Any) -> str:
+    """Format millisecond or second timestamp to Asia/Shanghai human-readable datetime string."""
+    import datetime
+    if not ts:
+        return ""
+    try:
+        ts_num = float(ts)
+        if ts_num > 1e11:  # Milliseconds
+            ts_num = ts_num / 1000.0
+        tz = datetime.timezone(datetime.timedelta(hours=8))
+        dt = datetime.datetime.fromtimestamp(ts_num, tz)
+        return dt.strftime("%Y-%m-%d %H:%M:%S")
+    except Exception:
+        return str(ts)
+
+
 async def _upload_media_files(client: Client, media_paths: Optional[Union[list, str]]) -> list[str]:
     """Upload media files and return list of media IDs."""
     if not media_paths:
@@ -601,7 +692,7 @@ async def search_tweets(
     Parameters:
     - query: Search keywords, hashtags, or phrases.
     - count: Number of results to return (default: 10, max: 20).
-    - from_user: Optional username to filter tweets from a specific author (e.g. 'Shellyiii7777').
+    - from_user: Optional username to filter tweets from a specific author (e.g. 'twitter_user').
     - since_date: Optional start date filter in YYYY-MM-DD format (e.g. '2026-10-01').
     - until_date: Optional end date filter in YYYY-MM-DD format.
     - min_faves: Optional minimum like count filter (e.g. 10).
@@ -662,7 +753,7 @@ async def get_user_info(username: str) -> str:
     Returns bio, follower count, following count, total tweets, ID, etc.
 
     Parameters:
-    - username: Screen name of the user (e.g. 'Shellyiii7777', '@' optional).
+    - username: Screen name of the user (e.g. 'jack', '@' optional).
     """
     username = (username or "").strip().lstrip("@")
     if not username:
@@ -965,6 +1056,61 @@ async def get_trends(category: str = "trending", count: int = 20) -> str:
         return _format_res(False, "get_trends", f"获取趋势失败: {exc}", error=str(exc))
 
 
+@mcp.tool()
+async def get_mentions(count: int = 15) -> str:
+    """Check tweets and notifications where you were mentioned or tagged (@you).
+
+    Use this tool to see who mentioned/tagged you in tweets or replies.
+
+    Parameters:
+    - count: Number of mentions to fetch (default: 15, max: 40).
+    """
+    try:
+        client = get_client()
+        count = max(1, min(int(count or 15), 40))
+        notifs = await client.get_notifications("Mentions", count=count)
+        items = []
+
+        for n in list(notifs)[:count]:
+            msg = getattr(n, "message", "") or ""
+            u = getattr(n, "from_user", None)
+            from_user_dict = None
+            if u:
+                from_user_dict = {
+                    "screen_name": getattr(u, "screen_name", None),
+                    "name": getattr(u, "name", None),
+                    "id": str(getattr(u, "id", "")),
+                }
+
+            t = getattr(n, "tweet", None)
+            tweet_dict = None
+            if t:
+                raw_text = getattr(t, "text", "")
+                expanded_text = await _expand_tco_links(raw_text)
+                tweet_dict = {
+                    "id": str(getattr(t, "id", "")),
+                    "text": expanded_text,
+                    "url": f"https://x.com/i/status/{getattr(t, 'id', '')}",
+                    "created_at": getattr(t, "created_at", ""),
+                }
+
+            items.append({
+                "notification_id": getattr(n, "id", ""),
+                "message": msg,
+                "time": _format_timestamp(getattr(n, "timestamp_ms", None)),
+                "from_user": from_user_dict,
+                "tweet": tweet_dict,
+            })
+
+        summary_text = f"成功获取 {len(items)} 条被提及 (@Mentions) 记录"
+        return _format_res(
+            True, "get_mentions", summary_text,
+            data={"total": len(items), "mentions": items}
+        )
+    except Exception as exc:
+        return _format_res(False, "get_mentions", f"获取被提及记录失败: {exc}", error=str(exc))
+
+
 # -------------------------------------------------------------
 # 5. Direct Messages (DMs) & Tweet Sharing
 # -------------------------------------------------------------
@@ -972,6 +1118,7 @@ async def get_trends(category: str = "trending", count: int = 20) -> str:
 @mcp.tool()
 async def read_direct_messages(username: Optional[str] = None, count: int = 10) -> str:
     """Read direct messages (DM) conversation history with a specific user or inspect DM inbox.
+    Automatically parses message creation times and expands short t.co links.
 
     Parameters:
     - username: Optional username/handle of conversation partner or user ID. If omitted or empty, inspects DM inbox and returns recent conversation threads & unread status.
@@ -980,7 +1127,7 @@ async def read_direct_messages(username: Optional[str] = None, count: int = 10) 
     try:
         client = get_client()
         count = max(1, min(int(count or 10), 30))
-        my_id = str(await client.user_id())
+        my_id = await _get_my_user_id(client)
 
         if not username:
             import twikit.client.v11 as v11
@@ -1018,11 +1165,15 @@ async def read_direct_messages(username: Optional[str] = None, count: int = 10) 
                 m_data = m.get("message_data", {})
                 sender_id = str(m_data.get("sender_id", ""))
                 is_me = (sender_id == my_id)
+                raw_text = m_data.get("text", "")
+                expanded_text = await _expand_tco_links(raw_text)
+                msg_time = _format_timestamp(m.get("time") or m_data.get("time"))
                 recent_msgs.append({
                     "message_id": m.get("id", ""),
                     "sender_id": sender_id,
                     "is_me": is_me,
-                    "text": m_data.get("text", ""),
+                    "time": msg_time,
+                    "text": expanded_text,
                 })
             return _format_res(
                 True, "read_direct_messages",
@@ -1037,12 +1188,16 @@ async def read_direct_messages(username: Optional[str] = None, count: int = 10) 
         for msg in list(history or [])[:count]:
             sender_id = str(getattr(msg, "sender_id", ""))
             is_me = (sender_id == my_id)
+            raw_text = getattr(msg, "text", "")
+            expanded_text = await _expand_tco_links(raw_text)
+            msg_time = _format_timestamp(getattr(msg, "time", None))
             messages.append({
                 "message_id": getattr(msg, "id", ""),
                 "sender_id": sender_id,
                 "is_me": is_me,
                 "sender_label": "Me" if is_me else f"@{target_screen_name}",
-                "text": getattr(msg, "text", "")
+                "time": msg_time,
+                "text": expanded_text
             })
         messages.reverse()
         return _format_res(
@@ -1068,9 +1223,18 @@ async def send_direct_message(username: str, text: str, reply_to_message_id: Opt
     try:
         client = get_client()
         target_user_id, target_screen_name = await _resolve_user_id(client, username)
+        my_id = await _get_my_user_id(client)
         reply_id = str(reply_to_message_id).strip() if reply_to_message_id else None
-        sent_msg = await client.send_dm(target_user_id, text, reply_to=reply_id)
-        sent_id = getattr(sent_msg, "id", "sent")
+
+        # Directly call _send_dm with robust conversation ID to avoid client.user_id() 404
+        conv_id = f"{target_user_id}-{my_id}"
+        response = await client._send_dm(conv_id, text, None, reply_id)
+
+        sent_id = "sent"
+        entries = response.get("entries", []) if isinstance(response, dict) else []
+        if entries and isinstance(entries[0], dict):
+            sent_id = entries[0].get("message", {}).get("id", "sent")
+
         return _format_res(
             True, "send_direct_message", f"私信已成功发送给 @{target_screen_name}！",
             data={"recipient": target_screen_name, "message_id": str(sent_id), "text": text}
@@ -1099,14 +1263,15 @@ async def share_tweet_via_dm(username: str, tweet_id: str, comment: Optional[str
     try:
         client = get_client()
         target_user_id, target_screen_name = await _resolve_user_id(client, username)
-        sent_msg = await client.send_dm(target_user_id, full_text)
-        sent_id = getattr(sent_msg, "id", "sent")
+        my_id = await _get_my_user_id(client)
+        conv_id = f"{target_user_id}-{my_id}"
+        await client._send_dm(conv_id, full_text, None, None)
         return _format_res(
-            True, "share_tweet_via_dm", f"推文已成功通过私信分享给 @{target_screen_name}！",
-            data={"recipient": target_screen_name, "tweet_id": tweet_id, "url": tweet_url, "message_id": str(sent_id)}
+            True, "share_tweet_via_dm", f"推文已成功私信分享给 @{target_screen_name}！",
+            data={"recipient": target_screen_name, "tweet_id": tweet_id, "url": tweet_url}
         )
     except Exception as exc:
-        return _format_res(False, "share_tweet_via_dm", f"私信分享失败: {exc}", error=str(exc))
+        return _format_res(False, "share_tweet_via_dm", f"分享推文失败: {exc}", error=str(exc))
 
 
 # -------------------------------------------------------------

@@ -56,6 +56,7 @@
 | 工具名称 | 功能描述 | 参数 |
 | :--- | :--- | :--- |
 | `get_notifications` | 感知全部状态（通知中心：汇总点赞、新粉丝、回复提及，含具体对象 ID） | `category`（分类：'All', 'Verified', 'Mentions'，默认 'All'）, `count`（默认 15，最大 40） |
+| `get_mentions` | 专门获取别人提及(@)当前账号的推文与互动通知列表，含时间戳、提及人与原推文 | `count`（获取数量，默认 15，最大 40） |
 | `get_trends` | 查看实时热门话题与趋势榜单 | `category`（分类：'trending', 'for-you', 'news', 'sports', 'entertainment'，默认 'trending'）, `count`（默认 20，最大 50） |
 
 ### 5. 私信交流与推文分享
