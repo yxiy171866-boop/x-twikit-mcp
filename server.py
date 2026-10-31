@@ -1,6 +1,7 @@
 import os
 import sys
 import json
+import asyncio
 from pathlib import Path
 from typing import Optional, Union, Any
 from mcp.server.mcpserver import MCPServer
@@ -15,6 +16,16 @@ twikit.client.gql.Endpoint.SEARCH_TIMELINE = 'https://x.com/i/api/graphql/3fEctO
 twikit.client.gql.Endpoint.CREATE_TWEET = 'https://x.com/i/api/graphql/l4hk8uVGvR-a8kzQ4nOhPA/CreateTweet'
 
 mcp = MCPServer("x-twikit")
+
+
+def _format_error(exc: Any) -> str:
+    """Safely format exception to non-empty human-readable string."""
+    if not exc:
+        return "未知异常"
+    msg = str(exc).strip()
+    if not msg:
+        msg = getattr(exc, "message", None) or repr(exc)
+    return str(msg)
 
 
 def _format_res(
@@ -40,8 +51,13 @@ def _format_res(
     }
     if data is not None:
         res["data"] = data
-    if error:
-        res["error"] = str(error)
+    if error is not None:
+        err_str = str(error).strip()
+        if not err_str:
+            err_str = message
+        res["error"] = err_str
+    elif not success:
+        res["error"] = message
     return json.dumps(res, ensure_ascii=False, indent=2)
 
 
@@ -95,8 +111,21 @@ def _resolve_cookies() -> dict[str, str]:
     return {}
 
 
+_client_instance: Optional[Client] = None
+
+
+def reset_client() -> None:
+    """Clear cached Client session (e.g. after auth error or cookie refresh)."""
+    global _client_instance
+    _client_instance = None
+
+
 def get_client() -> Client:
-    """Initialize and return an authenticated Twikit Client."""
+    """Initialize and return an authenticated Twikit Client (singleton session)."""
+    global _client_instance
+    if _client_instance is not None:
+        return _client_instance
+
     cookies = _resolve_cookies()
     if not cookies or not cookies.get("auth_token") or not cookies.get("ct0"):
         raise RuntimeError(
@@ -106,7 +135,8 @@ def get_client() -> Client:
 
     client = Client("en-US")
     client.set_cookies(cookies)
-    return client
+    _client_instance = client
+    return _client_instance
 
 
 async def _resolve_user_id(client: Client, identifier: str) -> tuple[str, str]:
@@ -254,6 +284,7 @@ async def post_tweet(text: str, media_paths: Optional[Union[list[str], str]] = N
     if not text and not media_paths:
         return _format_res(False, "post_tweet", "发推失败：推文内容与媒体附件不能同时为空", error="Empty tweet text and media")
     try:
+        await asyncio.sleep(1.0)
         client = get_client()
         media_ids = await _upload_media_files(client, media_paths) if media_paths else None
         tweet = await client.create_tweet(text=text, media_ids=media_ids)
@@ -264,12 +295,12 @@ async def post_tweet(text: str, media_paths: Optional[Union[list[str], str]] = N
             data={"tweet_id": str(tweet_id), "url": url, "text": text, "media_count": len(media_ids or [])}
         )
     except Exception as exc:
-        err_msg = str(exc)
+        err_msg = _format_error(exc)
         if "344" in err_msg:
             err_msg = "触发了 X 账号发推频次上限（错误码 344），请等待冷却数小时后再试。"
         elif "226" in err_msg:
             err_msg = "触发了 X 自动化安全拦截（错误码 226），请调整文案避免重复。"
-        return _format_res(False, "post_tweet", f"发推失败: {err_msg}", error=str(exc))
+        return _format_res(False, "post_tweet", f"发推失败: {err_msg}", error=err_msg)
 
 
 @mcp.tool()
@@ -288,6 +319,7 @@ async def reply_tweet(tweet_id: str, text: str, media_paths: Optional[Union[list
     if not text and not media_paths:
         return _format_res(False, "reply_tweet", "回复失败：回复内容与媒体附件不能同时为空", error="Empty text and media")
     try:
+        await asyncio.sleep(1.0)
         client = get_client()
         media_ids = await _upload_media_files(client, media_paths) if media_paths else None
         reply = await client.create_tweet(text=text, reply_to=tweet_id, media_ids=media_ids)
@@ -298,10 +330,10 @@ async def reply_tweet(tweet_id: str, text: str, media_paths: Optional[Union[list
             data={"reply_id": str(reply_id), "target_tweet_id": tweet_id, "url": url, "text": text}
         )
     except Exception as exc:
-        err_msg = str(exc)
+        err_msg = _format_error(exc)
         if "344" in err_msg:
             err_msg = "触发了 X 回复频次限制（错误码 344），请稍后再试。"
-        return _format_res(False, "reply_tweet", f"回复失败: {err_msg}", error=str(exc))
+        return _format_res(False, "reply_tweet", f"回复失败: {err_msg}", error=err_msg)
 
 
 @mcp.tool()
@@ -361,11 +393,13 @@ async def favorite_tweet(tweet_id: str) -> str:
     if not tweet_id:
         return _format_res(False, "favorite_tweet", "点赞失败：tweet_id 不能为空", error="Empty tweet_id")
     try:
+        await asyncio.sleep(0.5)
         client = get_client()
         await client.favorite_tweet(tweet_id)
         return _format_res(True, "favorite_tweet", f"点赞成功！推文 ID: {tweet_id}", data={"tweet_id": tweet_id, "liked": True})
     except Exception as exc:
-        return _format_res(False, "favorite_tweet", f"点赞失败: {exc}", error=str(exc))
+        err_msg = _format_error(exc)
+        return _format_res(False, "favorite_tweet", f"点赞失败: {err_msg}", error=err_msg)
 
 
 @mcp.tool()
@@ -383,7 +417,8 @@ async def unfavorite_tweet(tweet_id: str) -> str:
         await client.unfavorite_tweet(tweet_id)
         return _format_res(True, "unfavorite_tweet", f"已取消对推文 {tweet_id} 的点赞", data={"tweet_id": tweet_id, "liked": False})
     except Exception as exc:
-        return _format_res(False, "unfavorite_tweet", f"取消点赞失败: {exc}", error=str(exc))
+        err_msg = _format_error(exc)
+        return _format_res(False, "unfavorite_tweet", f"取消点赞失败: {err_msg}", error=err_msg)
 
 
 @mcp.tool()
@@ -397,6 +432,7 @@ async def retweet(tweet_id: str) -> str:
     if not tweet_id:
         return _format_res(False, "retweet", "转推失败：tweet_id 不能为空", error="Empty tweet_id")
     try:
+        await asyncio.sleep(0.5)
         client = get_client()
         data, response = await client.gql.retweet(tweet_id)
         if isinstance(data, dict):
@@ -409,7 +445,8 @@ async def retweet(tweet_id: str) -> str:
                 return _format_res(False, "retweet", "转推失败：推文不存在或已被删除", error="No retweet result returned")
         return _format_res(True, "retweet", f"转推成功！推文 ID: {tweet_id}", data={"tweet_id": tweet_id, "retweeted": True})
     except Exception as exc:
-        return _format_res(False, "retweet", f"转推失败: {exc}", error=str(exc))
+        err_msg = _format_error(exc)
+        return _format_res(False, "retweet", f"转推失败: {err_msg}", error=err_msg)
 
 
 @mcp.tool()
