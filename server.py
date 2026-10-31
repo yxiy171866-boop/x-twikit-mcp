@@ -6,6 +6,13 @@ from typing import Optional, Union, Any
 from mcp.server.mcpserver import MCPServer
 from twikit import Client
 from twikit.tweet import Tweet
+import twikit.client.gql
+
+# Patch Twitter/X GraphQL dynamic query IDs to prevent 404 errors from API updates
+twikit.client.gql.Endpoint.CREATE_RETWEET = 'https://x.com/i/api/graphql/mbRO74GrOvSfRcJnlMapnQ/CreateRetweet'
+twikit.client.gql.Endpoint.DELETE_RETWEET = 'https://x.com/i/api/graphql/ZyZigVsNiFO6v1dEks1eWg/DeleteRetweet'
+twikit.client.gql.Endpoint.SEARCH_TIMELINE = 'https://x.com/i/api/graphql/3fEctOs2-FvTB7_mvm1hrQ/SearchTimeline'
+twikit.client.gql.Endpoint.CREATE_TWEET = 'https://x.com/i/api/graphql/l4hk8uVGvR-a8kzQ4nOhPA/CreateTweet'
 
 mcp = MCPServer("x-twikit")
 
@@ -240,7 +247,7 @@ async def post_tweet(text: str, media_paths: Optional[Union[list[str], str]] = N
     """Post a new tweet to X (Twitter), with optional images/media attachments.
 
     Parameters:
-    - text: Content of the tweet to post.
+    - text: Content of the tweet to post. You can mention users by including @username in the text (e.g. '@Shellyiii7777 早安！').
     - media_paths: Optional list of local file paths (or comma-separated string) for images/media to attach.
     """
     text = (text or "").strip()
@@ -391,7 +398,15 @@ async def retweet(tweet_id: str) -> str:
         return _format_res(False, "retweet", "转推失败：tweet_id 不能为空", error="Empty tweet_id")
     try:
         client = get_client()
-        await client.retweet(tweet_id)
+        data, response = await client.gql.retweet(tweet_id)
+        if isinstance(data, dict):
+            errors = data.get("errors") or []
+            if errors:
+                err_msg = errors[0].get("message") or str(errors[0])
+                return _format_res(False, "retweet", f"转推失败: {err_msg}", error=err_msg)
+            res_data = data.get("data", {}).get("create_retweet", {})
+            if not res_data:
+                return _format_res(False, "retweet", "转推失败：推文不存在或已被删除", error="No retweet result returned")
         return _format_res(True, "retweet", f"转推成功！推文 ID: {tweet_id}", data={"tweet_id": tweet_id, "retweeted": True})
     except Exception as exc:
         return _format_res(False, "retweet", f"转推失败: {exc}", error=str(exc))
@@ -409,7 +424,12 @@ async def unretweet(tweet_id: str) -> str:
         return _format_res(False, "unretweet", "取消转推失败：tweet_id 不能为空", error="Empty tweet_id")
     try:
         client = get_client()
-        await client.delete_retweet(tweet_id)
+        data, response = await client.gql.delete_retweet(tweet_id)
+        if isinstance(data, dict):
+            errors = data.get("errors") or []
+            if errors:
+                err_msg = errors[0].get("message") or str(errors[0])
+                return _format_res(False, "unretweet", f"取消转推失败: {err_msg}", error=err_msg)
         return _format_res(True, "unretweet", f"已取消转推推文 {tweet_id}", data={"tweet_id": tweet_id, "retweeted": False})
     except Exception as exc:
         return _format_res(False, "unretweet", f"取消转推失败: {exc}", error=str(exc))
