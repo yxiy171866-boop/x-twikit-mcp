@@ -4,6 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-brightgreen.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-purple.svg)](https://modelcontextprotocol.io)
+[![M8ven Trust](https://m8ven.ai/badge/mcp/yxiy171866-boop/x-twikit-mcp)](https://m8ven.ai/mcp/yxiy171866-boop/x-twikit-mcp?s=readme)
 
 本项目是基于 [twikit](https://github.com/d60/twikit) 实现的 Model Context Protocol (MCP) 服务，专门为 AI 助手、大语言模型及各类 AI Agent 提供与 X (Twitter) 交互的能力。通过本服务，AI 能够自主调用工具完成状态感知、发推（含图片）、读写评论、收发私信、关注互动、趋势发现以及重点账号追踪等全流程操作。
 
