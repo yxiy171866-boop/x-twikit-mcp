@@ -308,7 +308,7 @@ async def reply_tweet(tweet_id: str, text: str, media_paths: Optional[Union[list
     """Reply to an existing tweet or comment on X (Twitter), with optional media.
 
     Parameters:
-    - tweet_id: The ID of the tweet or comment to reply to.
+    - tweet_id: The ID of the tweet or comment to reply to. Note: If replying to a specific comment, pass that specific comment's reply_id to thread properly underneath it rather than under the root tweet.
     - text: Content of your reply.
     - media_paths: Optional list of local file paths (or comma-separated string) for images to attach.
     """

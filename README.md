@@ -21,7 +21,7 @@
 | 工具名称 | 功能描述 | 参数 |
 | :--- | :--- | :--- |
 | `post_tweet` | 发布新推文（支持带本地图片/媒体） | `text`（推文文字）, `media_paths`（可选，图片文件路径或路径列表） |
-| `reply_tweet` | 回复指定推文或评论（支持带图片） | `tweet_id`（目标推文 ID）, `text`（回复文字）, `media_paths`（可选） |
+| `reply_tweet` | 回复指定推文或特定评论（支持带图片，回复评论请填该评论 ID） | `tweet_id`（目标推文或目标评论 ID）, `text`（回复文字）, `media_paths`（可选） |
 | `quote_tweet` | 引用转发推文（Quote Tweet） | `tweet_id`（目标推文 ID）, `text`（评论文字）, `media_paths`（可选） |
 | `delete_tweet` | 删除自己发布的推文 | `tweet_id`（推文 ID） |
 | `favorite_tweet` | 点赞指定推文 | `tweet_id`（推文 ID） |
