@@ -2,18 +2,117 @@ import os
 import sys
 import json
 import asyncio
+import re
 from pathlib import Path
 from typing import Optional, Union, Any
 from mcp.server.mcpserver import MCPServer
 from twikit import Client
 from twikit.tweet import Tweet
 import twikit.client.gql
+import twikit.x_client_transaction.transaction as _twikit_tx
+import twikit.user as _twikit_user
 
 # Patch Twitter/X GraphQL dynamic query IDs to prevent 404 errors from API updates
 twikit.client.gql.Endpoint.CREATE_RETWEET = 'https://x.com/i/api/graphql/mbRO74GrOvSfRcJnlMapnQ/CreateRetweet'
 twikit.client.gql.Endpoint.DELETE_RETWEET = 'https://x.com/i/api/graphql/ZyZigVsNiFO6v1dEks1eWg/DeleteRetweet'
 twikit.client.gql.Endpoint.SEARCH_TIMELINE = 'https://x.com/i/api/graphql/3fEctOs2-FvTB7_mvm1hrQ/SearchTimeline'
 twikit.client.gql.Endpoint.CREATE_TWEET = 'https://x.com/i/api/graphql/l4hk8uVGvR-a8kzQ4nOhPA/CreateTweet'
+
+# ---------------------------------------------------------------------------
+# Monkey Patch 1: Twitter/X Webpack Chunk 2-step lookup for ondemand.s
+# Resolves "Couldn't get KEY_BYTE indices" on official PyPI twikit (d60/twikit 2.3.3)
+# when Twitter updated its client bundle layout to split chunk names and hashes.
+# ---------------------------------------------------------------------------
+_INDICES_REGEX = re.compile(r"""(\(\w{1}\[(\d{1,2})\],\s*16\))+""", flags=(re.VERBOSE | re.MULTILINE))
+_TWO_STEP_CHUNK_REGEX = re.compile(r""",(\d+):["']ondemand\.s["']""", flags=(re.VERBOSE | re.MULTILINE))
+_LEGACY_CHUNK_REGEX = re.compile(r"""['|\"]ondemand\.s['|\"]:\s*['|\"]([\w]*)['|\"]""", flags=(re.VERBOSE | re.MULTILINE))
+_original_get_indices = _twikit_tx.ClientTransaction.get_indices
+
+
+async def _patched_get_indices(self, home_page_response, session, headers):
+    key_byte_indices = []
+    response = self.validate_response(home_page_response) or self.home_page_response
+    body = str(response)
+
+    # 1. 尝试新的 Webpack 2 步映射查找 (name -> chunk_idx -> chunk_hash)
+    idx_match = _TWO_STEP_CHUNK_REGEX.search(body)
+    if idx_match:
+        chunk_idx = idx_match.group(1)
+        hash_regex = re.compile(rf',{chunk_idx}:"([0-9a-f]+)"')
+        hash_match = hash_regex.search(body)
+        if hash_match:
+            on_demand_file_url = (
+                "https://abs.twimg.com/responsive-web/client-web/"
+                f"ondemand.s.{hash_match.group(1)}a.js"
+            )
+            on_demand_file_response = await session.request(
+                method="GET", url=on_demand_file_url, headers=headers
+            )
+            for item in _INDICES_REGEX.finditer(str(on_demand_file_response.text)):
+                key_byte_indices.append(item.group(2))
+
+    # 2. 如果新格式未匹配，尝试旧版 inline 格式 (兼容与回退)
+    if not key_byte_indices:
+        legacy_match = _LEGACY_CHUNK_REGEX.search(body)
+        if legacy_match:
+            on_demand_file_url = (
+                "https://abs.twimg.com/responsive-web/client-web/"
+                f"ondemand.s.{legacy_match.group(1)}a.js"
+            )
+            on_demand_file_response = await session.request(
+                method="GET", url=on_demand_file_url, headers=headers
+            )
+            for item in _INDICES_REGEX.finditer(str(on_demand_file_response.text)):
+                key_byte_indices.append(item.group(2))
+
+    if not key_byte_indices:
+        return await _original_get_indices(self, home_page_response, session, headers)
+
+    key_byte_indices = list(map(int, key_byte_indices))
+    return key_byte_indices[0], key_byte_indices[1:]
+
+
+_twikit_tx.ClientTransaction.get_indices = _patched_get_indices
+
+
+# ---------------------------------------------------------------------------
+# Monkey Patch 2: Safe defaults for twikit User profile parsing
+# Prevents KeyError when Twitter omits legacy fields (e.g. entities.description.urls,
+# pinned_tweet_ids_str, location, description) on vanilla PyPI twikit.
+# ---------------------------------------------------------------------------
+_original_user_init = _twikit_user.User.__init__
+
+
+def _patched_user_init(self, client, data: dict) -> None:
+    if isinstance(data, dict):
+        legacy = data.get('legacy')
+        if not isinstance(legacy, dict):
+            legacy = {}
+            data['legacy'] = legacy
+
+        legacy.setdefault('location', '')
+        legacy.setdefault('description', '')
+        legacy.setdefault('pinned_tweet_ids_str', [])
+
+        entities = legacy.get('entities')
+        if not isinstance(entities, dict):
+            entities = {}
+            legacy['entities'] = entities
+
+        if 'description' not in entities or not isinstance(entities['description'], dict):
+            entities['description'] = {'urls': []}
+        else:
+            entities['description'].setdefault('urls', [])
+
+        if 'url' not in entities or not isinstance(entities['url'], dict):
+            entities['url'] = {'urls': []}
+        else:
+            entities['url'].setdefault('urls', [])
+
+    return _original_user_init(self, client, data)
+
+
+_twikit_user.User.__init__ = _patched_user_init
 
 mcp = MCPServer("x-twikit")
 

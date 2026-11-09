@@ -1,3 +1,4 @@
 mcp>=1.0.0
-twikit>=2.0.0
+# Use unclecode/twikit fork (resolves X Webpack format changes and User profile KeyError)
+twikit @ git+https://github.com/unclecode/twikit.git
 

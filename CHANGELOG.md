@@ -2,6 +2,13 @@
 
 所有针对本项目的重要变动均记录在此文件中。
 
+## [v1.2.4] - 2026-11-09
+
+### 兼容性与稳定性修复
+- **修复 Twitter Webpack Chunk 拆分导致的 KEY_BYTE indices 提取失败**：适配 X 官方前端 JavaScript 打包规则更新，在 `server.py` 内置运行时热补丁（两步解析映射），彻底解决原版 `twikit` 报错 `Couldn't get KEY_BYTE indices` 导致所有请求无法发出的问题。
+- **修复用户资料解析 KeyError 崩溃**：针对 X 接口有时不返回 `entities.description.urls`、`pinned_tweet_ids_str` 或 `description` 的情况，在 `server.py` 内置 `User.__init__` 安全兜底补丁，避免解析用户资料时触发 `KeyError`。
+- **依赖源更新为社区维护分支**：在 `requirements.txt` 中将依赖明确指向修复分支 `git+https://github.com/unclecode/twikit.git`，并在 `README.md` 中完善环境安装与依赖版本说明。
+
 ## [v1.2.3] - 2026-10-31
 
 ### 性能与防风控优化
