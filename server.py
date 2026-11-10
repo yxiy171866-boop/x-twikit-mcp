@@ -238,6 +238,48 @@ def get_client() -> Client:
     return _client_instance
 
 
+def _clean_tweet_id(val: str) -> str:
+    """Extract numeric tweet ID from raw string, link, or status URL."""
+    s = str(val or "").strip()
+    if not s:
+        return ""
+    m = re.search(r"(?:status/|status%2F|/i/status/)?(\d{15,25})", s)
+    if m:
+        return m.group(1)
+    digits = re.search(r"\d{15,25}", s)
+    return digits.group(0) if digits else s
+
+
+def _extract_user_info(tweet_item: Any) -> tuple[str, str]:
+    """Extract (screen_name, name) from a Twikit Tweet object or tweet dictionary.
+    Supports both modern (core.user_results.result.core) and legacy GraphQL structures.
+    """
+    if not tweet_item:
+        return "unknown", ""
+    user = getattr(tweet_item, "user", None)
+    data = getattr(tweet_item, "_data", None)
+    if not isinstance(data, dict):
+        data = tweet_item if isinstance(tweet_item, dict) else {}
+
+    user_res = data.get("core", {}).get("user_results", {}).get("result", {})
+    user_core = user_res.get("core", {})
+    user_legacy = user_res.get("legacy", {})
+
+    screen_name = (
+        user_core.get("screen_name")
+        or user_legacy.get("screen_name")
+        or getattr(user, "screen_name", None)
+        or "unknown"
+    )
+    name = (
+        user_core.get("name")
+        or user_legacy.get("name")
+        or getattr(user, "name", None)
+        or ""
+    )
+    return str(screen_name), str(name)
+
+
 async def _resolve_user_id(client: Client, identifier: str) -> tuple[str, str]:
     """Resolve screen_name or numeric ID to (user_id, screen_name)."""
     clean_id = (identifier or "").strip().lstrip("@")
@@ -411,7 +453,7 @@ async def reply_tweet(tweet_id: str, text: str, media_paths: Optional[Union[list
     - text: Content of your reply.
     - media_paths: Optional list of local file paths (or comma-separated string) for images to attach.
     """
-    tweet_id = str(tweet_id or "").strip()
+    tweet_id = _clean_tweet_id(tweet_id)
     text = (text or "").strip()
     if not tweet_id:
         return _format_res(False, "reply_tweet", "回复失败：tweet_id 不能为空", error="Empty tweet_id")
@@ -444,7 +486,7 @@ async def quote_tweet(tweet_id: str, text: str, media_paths: Optional[Union[list
     - text: Your commentary text for the quote tweet.
     - media_paths: Optional list of local file paths for images to attach.
     """
-    tweet_id = str(tweet_id or "").strip()
+    tweet_id = _clean_tweet_id(tweet_id)
     text = (text or "").strip()
     if not tweet_id:
         return _format_res(False, "quote_tweet", "引用推文失败：tweet_id 不能为空", error="Empty tweet_id")
@@ -470,7 +512,7 @@ async def delete_tweet(tweet_id: str) -> str:
     Parameters:
     - tweet_id: ID of the tweet to delete.
     """
-    tweet_id = str(tweet_id or "").strip()
+    tweet_id = _clean_tweet_id(tweet_id)
     if not tweet_id:
         return _format_res(False, "delete_tweet", "删除推文失败：tweet_id 不能为空", error="Empty tweet_id")
     try:
@@ -488,7 +530,7 @@ async def favorite_tweet(tweet_id: str) -> str:
     Parameters:
     - tweet_id: ID of the tweet to like.
     """
-    tweet_id = str(tweet_id or "").strip()
+    tweet_id = _clean_tweet_id(tweet_id)
     if not tweet_id:
         return _format_res(False, "favorite_tweet", "点赞失败：tweet_id 不能为空", error="Empty tweet_id")
     try:
@@ -508,7 +550,7 @@ async def unfavorite_tweet(tweet_id: str) -> str:
     Parameters:
     - tweet_id: ID of the tweet to unlike.
     """
-    tweet_id = str(tweet_id or "").strip()
+    tweet_id = _clean_tweet_id(tweet_id)
     if not tweet_id:
         return _format_res(False, "unfavorite_tweet", "取消点赞失败：tweet_id 不能为空", error="Empty tweet_id")
     try:
@@ -527,7 +569,7 @@ async def retweet(tweet_id: str) -> str:
     Parameters:
     - tweet_id: ID of the tweet to retweet.
     """
-    tweet_id = str(tweet_id or "").strip()
+    tweet_id = _clean_tweet_id(tweet_id)
     if not tweet_id:
         return _format_res(False, "retweet", "转推失败：tweet_id 不能为空", error="Empty tweet_id")
     try:
@@ -555,7 +597,7 @@ async def unretweet(tweet_id: str) -> str:
     Parameters:
     - tweet_id: Original ID of the tweet you retweeted.
     """
-    tweet_id = str(tweet_id or "").strip()
+    tweet_id = _clean_tweet_id(tweet_id)
     if not tweet_id:
         return _format_res(False, "unretweet", "取消转推失败：tweet_id 不能为空", error="Empty tweet_id")
     try:
@@ -578,7 +620,7 @@ async def bookmark_tweet(tweet_id: str) -> str:
     Parameters:
     - tweet_id: ID of the tweet to save to bookmarks.
     """
-    tweet_id = str(tweet_id or "").strip()
+    tweet_id = _clean_tweet_id(tweet_id)
     if not tweet_id:
         return _format_res(False, "bookmark_tweet", "收藏失败：tweet_id 不能为空", error="Empty tweet_id")
     try:
@@ -596,7 +638,7 @@ async def unbookmark_tweet(tweet_id: str) -> str:
     Parameters:
     - tweet_id: ID of the tweet to remove from bookmarks.
     """
-    tweet_id = str(tweet_id or "").strip()
+    tweet_id = _clean_tweet_id(tweet_id)
     if not tweet_id:
         return _format_res(False, "unbookmark_tweet", "移除书签失败：tweet_id 不能为空", error="Empty tweet_id")
     try:
@@ -643,14 +685,14 @@ async def get_bookmarks(count: int = 10) -> str:
 
 @mcp.tool()
 async def get_tweet_by_id(tweet_id: str) -> str:
-    """Get comprehensive details and live metrics of a specific tweet by its ID.
+    """Get comprehensive details and live metrics of a specific tweet by its ID or direct URL.
 
     Returns stats including Likes, Bookmarks, Retweets, Replies, and Views.
 
     Parameters:
-    - tweet_id: The unique ID of the tweet.
+    - tweet_id: The unique ID or direct URL of the tweet.
     """
-    tweet_id = str(tweet_id or "").strip()
+    tweet_id = _clean_tweet_id(tweet_id)
     if not tweet_id:
         return _format_res(False, "get_tweet_by_id", "查询失败：tweet_id 不能为空", error="Empty tweet_id")
     try:
@@ -671,9 +713,7 @@ async def get_tweet_by_id(tweet_id: str) -> str:
                     rest_id = tweet_results.get("rest_id") or tweet_results.get("id")
                     if str(rest_id) == str(tweet_id):
                         legacy = tweet_results.get("legacy", {})
-                        core_user = tweet_results.get("core", {}).get("user_results", {}).get("result", {}).get("legacy", {})
-                        screen_name = core_user.get("screen_name") or "unknown"
-                        name = core_user.get("name") or ""
+                        screen_name, name = _extract_user_info(tweet_results)
                         created_at = legacy.get("created_at") or ""
                         fav_count = legacy.get("favorite_count", 0)
                         retweet_count = legacy.get("retweet_count", 0)
@@ -681,7 +721,11 @@ async def get_tweet_by_id(tweet_id: str) -> str:
                         bookmark_count = legacy.get("bookmark_count", 0)
                         views_obj = tweet_results.get("views", {})
                         views_count = views_obj.get("count", "0") if isinstance(views_obj, dict) else "0"
-                        full_text = legacy.get("full_text") or ""
+                        full_text = (
+                            legacy.get("full_text")
+                            or tweet_results.get("note_tweet", {}).get("note_tweet_results", {}).get("result", {}).get("text")
+                            or ""
+                        )
                         url = f"https://x.com/i/status/{tweet_id}"
 
                         stats = {
@@ -719,7 +763,7 @@ async def get_tweet_replies(tweet_id: str, count: int = 10) -> str:
     - tweet_id: ID of the tweet whose replies you want to view.
     - count: Maximum number of replies to return (default: 10, max: 50).
     """
-    tweet_id = str(tweet_id or "").strip()
+    tweet_id = _clean_tweet_id(tweet_id)
     if not tweet_id:
         return _format_res(False, "get_tweet_replies", "查询失败：tweet_id 不能为空", error="Empty tweet_id")
 
@@ -747,11 +791,11 @@ async def get_tweet_replies(tweet_id: str, count: int = 10) -> str:
             try:
                 t = Tweet(client, res_obj, None)
                 if str(t.id) != str(tweet_id):
-                    u = getattr(t, "user", None)
+                    sn, n = _extract_user_info(t)
                     return {
                         "reply_id": str(t.id),
-                        "author": getattr(u, "screen_name", "unknown") if u else "unknown",
-                        "author_name": getattr(u, "name", "") if u else "",
+                        "author": sn,
+                        "author_name": n,
                         "text": t.text,
                         "created_at": getattr(t, "created_at", ""),
                         "url": f"https://x.com/i/status/{t.id}"
@@ -800,7 +844,7 @@ async def get_tweet_quotes(tweet_id: str, count: int = 10) -> str:
     - tweet_id: ID of the target tweet to find quotes for.
     - count: Number of quote tweets to fetch (default: 10, max: 20).
     """
-    tweet_id = str(tweet_id or "").strip()
+    tweet_id = _clean_tweet_id(tweet_id)
     if not tweet_id:
         return _format_res(False, "get_tweet_quotes", "查询失败：tweet_id 不能为空", error="Empty tweet_id")
     try:
@@ -881,11 +925,11 @@ async def search_tweets(
         try:
             results = await client.search_tweet(full_query, "Latest", count=count)
             for t in list(results)[:count]:
-                user = getattr(t, "user", None)
+                sn, n = _extract_user_info(t)
                 tweets.append({
                     "tweet_id": str(getattr(t, "id", "")),
-                    "author": getattr(user, "screen_name", "unknown") if user else "unknown",
-                    "author_name": getattr(user, "name", "") if user else "",
+                    "author": sn,
+                    "author_name": n,
                     "created_at": getattr(t, "created_at", ""),
                     "text": getattr(t, "text", ""),
                     "url": f"https://x.com/i/status/{getattr(t, 'id', '')}"
@@ -893,6 +937,39 @@ async def search_tweets(
         except Exception as e:
             if "404" not in str(e):
                 raise e
+
+        # Fallback for user-specific search if SearchTimeline returned 0 or 404
+        target_from = from_user.strip().lstrip("@") if from_user else None
+        if not target_from:
+            m_from = re.search(r"from:([a-zA-Z0-9_]+)", full_query)
+            if m_from:
+                target_from = m_from.group(1)
+
+        if not tweets and target_from:
+            clean_kw = re.sub(r"from:[a-zA-Z0-9_]+", "", full_query).strip()
+            try:
+                u = await client.get_user_by_screen_name(target_from)
+                if u:
+                    u_tweets = await u.get_tweets("Tweets", count=max(20, count * 2))
+                    for t in u_tweets:
+                        txt = getattr(t, "text", "")
+                        if not clean_kw or clean_kw in txt:
+                            sn, n = _extract_user_info(t)
+                            if sn == "unknown":
+                                sn = u.screen_name
+                                n = getattr(u, "name", "")
+                            tweets.append({
+                                "tweet_id": str(getattr(t, "id", "")),
+                                "author": sn,
+                                "author_name": n,
+                                "created_at": getattr(t, "created_at", ""),
+                                "text": txt,
+                                "url": f"https://x.com/i/status/{getattr(t, 'id', '')}"
+                            })
+                        if len(tweets) >= count:
+                            break
+            except Exception:
+                pass
 
         return _format_res(
             True, "search_tweets", f"搜索完成，找到 {len(tweets)} 条符合条件的推文",
@@ -1411,7 +1488,7 @@ async def share_tweet_via_dm(username: str, tweet_id: str, comment: Optional[str
     - tweet_id: The ID of the tweet to share.
     - comment: Optional personal message/commentary to accompany the shared post link.
     """
-    tweet_id = str(tweet_id or "").strip()
+    tweet_id = _clean_tweet_id(tweet_id)
     if not tweet_id:
         return _format_res(False, "share_tweet_via_dm", "分享失败：tweet_id 不能为空", error="Empty tweet_id")
     tweet_url = f"https://x.com/i/status/{tweet_id}"

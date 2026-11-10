@@ -2,6 +2,14 @@
 
 所有针对本项目的重要变动均记录在此文件中。
 
+## [v1.2.5] - 2026-11-10
+
+### 兼容性与易用性增强
+- **推文链接/URL 自动正则解析支持**：所有推文相关工具（`get_tweet_by_id`, `get_tweet_replies`, `get_tweet_quotes`, `reply_tweet`, `quote_tweet`, `delete_tweet`, `favorite_tweet`, `retweet`, `bookmark_tweet`, `share_tweet_via_dm` 等）全面支持直接传入推文 URL（如 `https://x.com/username/status/123456789...` 或带参数的移动端分享链接），自动提取纯数字 ID，无需客户端或 AI 手动剥离。
+- **GraphQL 用户信息提取规范升级 (core 字段兼容)**：适配 Twitter 最新 GraphQL 结构变动（作者信息从 `legacy` 移入 `core.user_results.result.core`），重构 `_extract_user_info`，解决搜索推文、推文详情及回复解析中 `author` 偶发返回 `unknown` 或 `null` 的问题。
+- **用户特定搜索兜底与时间线回退检索**：针对 Twitter `SearchTimeline` 端点在特定关键词或频次下返回 404 或空列表的问题，在 `search_tweets` 中新增对 `from_user` 或 `from:username` 语法的主页时间线智能回退检索，保障用户推文检索的高可用性。
+- **长推文 (Note Tweets) 全文提取兼容**：`get_tweet_by_id` 增加对 `note_tweet_results` 长文推文格式的深度解析，确保长推文不被截断，返回完整全文。
+
 ## [v1.2.4] - 2026-11-09
 
 ### 兼容性与稳定性修复

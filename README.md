@@ -1,6 +1,6 @@
 # X (Twitter) MCP 服务
 
-[![Version](https://img.shields.io/badge/version-v1.2.4-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v1.2.5-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-brightgreen.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-purple.svg)](https://modelcontextprotocol.io)
@@ -8,7 +8,7 @@
 
 本项目是基于 [twikit](https://github.com/d60/twikit) 实现的 Model Context Protocol (MCP) 服务，专门为 AI 助手、大语言模型及各类 AI Agent 提供与 X (Twitter) 交互的能力。通过本服务，AI 能够自主调用工具完成状态感知、发推（含图片）、读写评论、收发私信、关注互动、趋势发现以及重点账号追踪等全流程操作。
 
-服务通过普通账号的浏览器 Cookie（`auth_token` 与 `ct0`）与 X 官方 Web 端通信。所有工具统一采用结构化 JSON 响应，确保状态判定与字段解析的稳定性。
+服务通过普通账号的浏览器 Cookie（`auth_token` 与 `ct0`）与 X 官方 Web 端通信。所有工具统一采用结构化 JSON 响应，确保状态判定与字段解析的稳定性。所有涉及 `tweet_id` 的工具均全面支持直接传入推文数字 ID 或完整推文网页链接（URL）。
 
 ---
 
