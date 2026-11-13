@@ -1,6 +1,6 @@
 # X (Twitter) MCP 服务
 
-[![Version](https://img.shields.io/badge/version-v1.2.5-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-v1.2.6-blue.svg)](CHANGELOG.md)
 [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 [![Python 3.10+](https://img.shields.io/badge/python-3.10+-brightgreen.svg)](https://www.python.org/downloads/)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-purple.svg)](https://modelcontextprotocol.io)

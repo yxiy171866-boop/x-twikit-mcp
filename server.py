@@ -369,7 +369,7 @@ async def _expand_tco_links(text: str) -> str:
 
 
 def _format_timestamp(ts: Any) -> str:
-    """Format millisecond or second timestamp to Asia/Shanghai human-readable datetime string."""
+    """Format millisecond or second timestamp to Asia/Shanghai (UTC+8) human-readable datetime string."""
     import datetime
     if not ts:
         return ""
@@ -379,9 +379,52 @@ def _format_timestamp(ts: Any) -> str:
             ts_num = ts_num / 1000.0
         tz = datetime.timezone(datetime.timedelta(hours=8))
         dt = datetime.datetime.fromtimestamp(ts_num, tz)
-        return dt.strftime("%Y-%m-%d %H:%M:%S")
+        return dt.strftime("%Y-%m-%d %H:%M:%S (北京时间)")
     except Exception:
         return str(ts)
+
+
+def _format_created_at(raw_val: Any) -> str:
+    """Format Twitter UTC created_at string or datetime to Asia/Shanghai (UTC+8) human-readable datetime string.
+
+    Prevents AI models from misjudging tweet times due to UTC offset (+8 hours).
+    Example: 'Wed Nov 13 01:23:45 +0000 2026' -> '2026-11-13 09:23:45 (北京时间)'
+    """
+    if not raw_val:
+        return ""
+    import datetime
+    from email.utils import parsedate_to_datetime
+
+    cst_tz = datetime.timezone(datetime.timedelta(hours=8))
+
+    if isinstance(raw_val, datetime.datetime):
+        dt = raw_val if raw_val.tzinfo else raw_val.replace(tzinfo=datetime.timezone.utc)
+        return dt.astimezone(cst_tz).strftime("%Y-%m-%d %H:%M:%S (北京时间)")
+
+    raw_str = str(raw_val).strip()
+    try:
+        # Standard Twitter RFC 2822 format: 'Wed Nov 13 01:23:45 +0000 2026'
+        dt = parsedate_to_datetime(raw_str)
+        return dt.astimezone(cst_tz).strftime("%Y-%m-%d %H:%M:%S (北京时间)")
+    except Exception:
+        pass
+
+    try:
+        # ISO 8601 format: '2026-11-13T01:23:45Z'
+        dt = datetime.datetime.fromisoformat(raw_str.replace("Z", "+00:00"))
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=datetime.timezone.utc)
+        return dt.astimezone(cst_tz).strftime("%Y-%m-%d %H:%M:%S (北京时间)")
+    except Exception:
+        pass
+
+    try:
+        dt = datetime.datetime.strptime(raw_str, "%a %b %d %H:%M:%S %z %Y")
+        return dt.astimezone(cst_tz).strftime("%Y-%m-%d %H:%M:%S (北京时间)")
+    except Exception:
+        pass
+
+    return raw_str
 
 
 async def _upload_media_files(client: Client, media_paths: Optional[Union[list, str]]) -> list[str]:
@@ -667,7 +710,7 @@ async def get_bookmarks(count: int = 10) -> str:
             items.append({
                 "tweet_id": str(getattr(t, "id", "")),
                 "author": screen_name,
-                "created_at": getattr(t, "created_at", ""),
+                "created_at": _format_created_at(getattr(t, "created_at", "")),
                 "text": getattr(t, "text", ""),
                 "url": f"https://x.com/i/status/{getattr(t, 'id', '')}"
             })
@@ -741,7 +784,7 @@ async def get_tweet_by_id(tweet_id: str) -> str:
                                 "tweet_id": tweet_id,
                                 "author": screen_name,
                                 "author_name": name,
-                                "created_at": created_at,
+                                "created_at": _format_created_at(created_at),
                                 "text": full_text,
                                 "stats": stats,
                                 "url": url
@@ -797,7 +840,7 @@ async def get_tweet_replies(tweet_id: str, count: int = 10) -> str:
                         "author": sn,
                         "author_name": n,
                         "text": t.text,
-                        "created_at": getattr(t, "created_at", ""),
+                        "created_at": _format_created_at(getattr(t, "created_at", "")),
                         "url": f"https://x.com/i/status/{t.id}"
                     }
             except Exception:
@@ -861,7 +904,7 @@ async def get_tweet_quotes(tweet_id: str, count: int = 10) -> str:
                     "author": getattr(u, "screen_name", "unknown") if u else "unknown",
                     "author_name": getattr(u, "name", "") if u else "",
                     "text": getattr(t, "text", ""),
-                    "created_at": getattr(t, "created_at", ""),
+                    "created_at": _format_created_at(getattr(t, "created_at", "")),
                     "url": f"https://x.com/i/status/{t.id}"
                 })
         except Exception as e:
@@ -930,7 +973,7 @@ async def search_tweets(
                     "tweet_id": str(getattr(t, "id", "")),
                     "author": sn,
                     "author_name": n,
-                    "created_at": getattr(t, "created_at", ""),
+                    "created_at": _format_created_at(getattr(t, "created_at", "")),
                     "text": getattr(t, "text", ""),
                     "url": f"https://x.com/i/status/{getattr(t, 'id', '')}"
                 })
@@ -962,7 +1005,7 @@ async def search_tweets(
                                 "tweet_id": str(getattr(t, "id", "")),
                                 "author": sn,
                                 "author_name": n,
-                                "created_at": getattr(t, "created_at", ""),
+                                "created_at": _format_created_at(getattr(t, "created_at", "")),
                                 "text": txt,
                                 "url": f"https://x.com/i/status/{getattr(t, 'id', '')}"
                             })
@@ -1034,7 +1077,7 @@ async def get_user_tweets(username: str, count: int = 5) -> str:
             items.append({
                 "tweet_id": str(t.id),
                 "author": username,
-                "created_at": getattr(t, "created_at", ""),
+                "created_at": _format_created_at(getattr(t, "created_at", "")),
                 "text": t.text,
                 "url": f"https://x.com/i/status/{t.id}"
             })
@@ -1324,7 +1367,7 @@ async def get_mentions(count: int = 15) -> str:
                     "id": str(getattr(t, "id", "")),
                     "text": expanded_text,
                     "url": f"https://x.com/i/status/{getattr(t, 'id', '')}",
-                    "created_at": getattr(t, "created_at", ""),
+                    "created_at": _format_created_at(getattr(t, "created_at", "")),
                 }
 
             items.append({
@@ -1609,7 +1652,7 @@ async def get_priority_timeline(count_per_user: int = 3) -> str:
                         all_tweets.append({
                             "tweet_id": str(t.id),
                             "author": user_handle,
-                            "created_at": getattr(t, "created_at", ""),
+                            "created_at": _format_created_at(getattr(t, "created_at", "")),
                             "text": t.text,
                             "url": f"https://x.com/i/status/{t.id}"
                         })
